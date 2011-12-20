@@ -83,10 +83,21 @@
         for ( ; i < length; i++ ) {
           item = items[i];
           if ( item.html ) {
-            $('<li class="'+ settings.classname + '-'
-              + item.config.service + '">').data( "time", item.date )
-                                           .append( item.html )
-                                           .appendTo( ul );
+            if ( item.url ) {
+              $('<li class="'+ settings.classname + '-'
+                + item.config.service + '">').data( "name", item.config.service )
+                                             .data( "url", item.url )
+                                             .data( "time", item.date )
+                                             .append( item.html )
+                                             .appendTo( ul );
+            } else {
+              $('<li class="'+ settings.classname + '-'
+                + item.config.service + '">').data( "name", item.config.service )
+                                             .data( "url", "#" )
+                                             .data( "time", item.date )
+                                             .append( item.html )
+                                             .appendTo( ul );
+            }
           }
         }
 
@@ -167,7 +178,8 @@
    */
   $.fn.lifestream.feeds = $.fn.lifestream.feeds || {};
 
-}( jQuery ));(function($) {
+}( jQuery ));
+(function($) {
 $.fn.lifestream.feeds.bitbucket = function( config, callback ) {
 
   var template = $.extend({},
@@ -839,7 +851,8 @@ $.fn.lifestream.feeds.github = function( config, callback ) {
         output.push({
           date: new Date(status.created_at),
           config: config,
-          html: parseGithubStatus(status)
+          html: parseGithubStatus(status),
+          url: 'http://github.com/' + config.user
         });
       }
     }
@@ -866,12 +879,14 @@ $.fn.lifestream.feeds.github = function( config, callback ) {
   };
 
 };
-})(jQuery);(function($) {
+})(jQuery);
+(function($) {
 $.fn.lifestream.feeds.googlereader = function( config, callback ) {
 
   var template = $.extend({},
     {
-      starred: 'shared post <a href="${link.href}">${title.content}</a>'
+      starred: 'shared <a href="{{if link.href}}${link.href}'
+        + '{{else}}${source.link.href}{{/if}}">${title.content}</a>'
     },
     config.template),
 
@@ -887,6 +902,7 @@ $.fn.lifestream.feeds.googlereader = function( config, callback ) {
       for( ; i<j; i++) {
         var item = list[i];
         output.push({
+          url: 'http://www.google.com/reader/shared/' + config.user,
           date: new Date(parseInt(item["crawl-timestamp-msec"], 10)),
           config: config,
           html: $.tmpl( template.starred, item )
@@ -913,12 +929,13 @@ $.fn.lifestream.feeds.googlereader = function( config, callback ) {
   };
 
 };
-})(jQuery);(function($) {
+})(jQuery);
+(function($) {
 $.fn.lifestream.feeds.instapaper = function( config, callback ) {
 
   var template = $.extend({},
     {
-      loved: 'loved <a href="${link}">${title}</a>'
+      loved: 'starred <a href="${link}">${title}</a>'
     },
     config.template),
 
@@ -935,7 +952,8 @@ $.fn.lifestream.feeds.instapaper = function( config, callback ) {
         output.push({
           date: new Date( item.pubDate ),
           config: config,
-          html: $.tmpl( template.loved, item )
+          html: $.tmpl( template.loved, item ),
+          url: 'http://www.instapaper.com/'
         });
       }
     }
@@ -959,7 +977,8 @@ $.fn.lifestream.feeds.instapaper = function( config, callback ) {
   };
 
 };
-})(jQuery);(function($) {
+})(jQuery);
+(function($) {
 $.fn.lifestream.feeds.iusethis = function( config, callback ) {
 
   var template = $.extend({},
@@ -1043,8 +1062,8 @@ $.fn.lifestream.feeds.lastfm = function( config, callback ) {
 
   var template = $.extend({},
     {
-      loved: 'loved <a href="${url}">${name}</a> by '
-        + '<a href="${artist.url}">${artist.name}</a>'
+      loved: 'listened to <a href="${artist.mbid}">${artist.content}</a> - '
+        + '<a href="${url}">${name}</a>'
     },
     config.template),
 
@@ -1052,16 +1071,16 @@ $.fn.lifestream.feeds.lastfm = function( config, callback ) {
     var output = [], list, i = 0, j;
 
     if(input.query && input.query.count && input.query.count > 0
-        && input.query.results.lovedtracks
-        && input.query.results.lovedtracks.track) {
-      list = input.query.results.lovedtracks.track;
+        && input.query.results.recenttracks
+        && input.query.results.recenttracks.track) {
+      list = input.query.results.recenttracks.track;
       j = list.length;
       for( ; i<j; i++) {
         var item = list[i];
         output.push({
           date: new Date(parseInt((item.date.uts * 1000), 10)),
           config: config,
-          html: $.tmpl( template.loved, item )
+          html: $.tmpl( template.loved, item ),
         });
       }
     }
@@ -1071,7 +1090,7 @@ $.fn.lifestream.feeds.lastfm = function( config, callback ) {
   $.ajax({
     url: $.fn.lifestream.createYqlUrl('select * from xml where url='
       + '"http://ws.audioscrobbler.com/2.0/user/'
-      + config.user + '/lovedtracks.xml"'),
+      + config.user + '/recenttracks.xml"'),
     dataType: 'jsonp',
     success: function( data ) {
       callback(parseLastfm(data));
@@ -1085,7 +1104,8 @@ $.fn.lifestream.feeds.lastfm = function( config, callback ) {
   };
 
 };
-})(jQuery);(function($) {
+})(jQuery);
+(function($) {
 $.fn.lifestream.feeds.mlkshk = function( config, callback ) {
 
   var template = $.extend({},
@@ -1277,6 +1297,10 @@ $.fn.lifestream.feeds.reddit = function( config, callback ) {
       created: '<a href="http://www.reddit.com${item.data.permalink}">'
         + 'created new thread (${score})</a> in '
         + '<a href="http://www.reddit.com/r/${item.data.subreddit}">'
+        + '${item.data.subreddit}</a>',
+      liked: 'liked <a href="http://www.reddit.com${item.data.permalink}">'
+        + '${item.data.title} (${score})</a> in '
+        + '<a href="http://www.reddit.com/r/${item.data.subreddit}">'
         + '${item.data.subreddit}</a>'
     },
     config.template);
@@ -1298,7 +1322,7 @@ $.fn.lifestream.feeds.reddit = function( config, callback ) {
       return $.tmpl( template.commented, pass );
     }
     else if (item.kind === "t3") {
-      return $.tmpl( template.created, pass );
+      return $.tmpl( template.liked, pass );
     }
 
   },
@@ -1311,7 +1335,7 @@ $.fn.lifestream.feeds.reddit = function( config, callback ) {
   };
 
   $.ajax({
-    url: "http://www.reddit.com/user/" + config.user + ".json",
+    url: "http://www.reddit.com/user/" + config.user + "/liked.json",
     dataType: "jsonp",
     jsonp:"jsonp",
     success: function( data ) {
@@ -1325,7 +1349,8 @@ $.fn.lifestream.feeds.reddit = function( config, callback ) {
           output.push({
             date: convertDate(item.data.created_utc),
             config: config,
-            html: parseRedditItem(item)
+            html: parseRedditItem(item),
+            url: 'http://reddit.com/user/' + config.user
           });
         }
       }
@@ -1341,7 +1366,8 @@ $.fn.lifestream.feeds.reddit = function( config, callback ) {
   };
 
 };
-})(jQuery);(function($) {
+})(jQuery);
+(function($) {
 $.fn.lifestream.feeds.slideshare = function( config, callback ) {
 
   var template = $.extend({},
@@ -1636,7 +1662,8 @@ $.fn.lifestream.feeds.tumblr = function( config, callback ) {
   };
 
 };
-})(jQuery);(function($) {
+})(jQuery);
+(function($) {
 $.fn.lifestream.feeds.twitter = function( config, callback ) {
 
   var template = $.extend({},
@@ -1701,7 +1728,8 @@ $.fn.lifestream.feeds.twitter = function( config, callback ) {
           config: config,
           html: $.tmpl( template.posted, {
             tweet: linkify(status.text)
-          } )
+          } ),
+          url: 'http://twitter.com/#!/' + config.user
         });
       }
     }
@@ -1727,7 +1755,8 @@ $.fn.lifestream.feeds.twitter = function( config, callback ) {
   };
 
 };
-})(jQuery);(function($) {
+})(jQuery);
+(function($) {
 $.fn.lifestream.feeds.vimeo = function( config, callback ) {
 
   var template = $.extend({},
@@ -1860,6 +1889,51 @@ $.fn.lifestream.feeds.youtube = function( config, callback ) {
     dataType: 'jsonp',
     success: function( data ) {
       callback(parseYoutube(data));
+    }
+  });
+
+  // Expose the template.
+  // We use this to check which templates are available
+  return {
+    "template" : template
+  };
+
+};
+})(jQuery);(function($) {
+$.fn.lifestream.feeds.zotero = function( config, callback ) {
+
+  var template = $.extend({},
+    {
+      flagged: 'flagged <a href="${id}">${title}</a> by ${creatorSummary}'
+    },
+    config.template),
+
+  parseZotero = function( input ) {
+    var output = [], list, i = 0, j;
+
+    if(input.query && input.query.count && input.query.count > 0) {
+      list = input.query.results.feed.entry;
+      j = list.length;
+      for( ; i<j; i++) {
+        var item = list[i];
+        output.push({
+          date: new Date(item.updated),
+          config: config,
+          url: 'http://zotero.com/users/' + config.user,
+          html: $.tmpl( template.flagged, item ),
+        });
+      }
+    }
+    return output;
+  };
+
+  $.ajax({
+    url: $.fn.lifestream.createYqlUrl('select * from xml where url='
+      + '"https://api.zotero.org/users/'
+      + config.user + '/items"'),
+    dataType: 'jsonp',
+    success: function( data ) {
+      callback(parseZotero(data));
     }
   });
 
