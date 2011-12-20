@@ -1,6 +1,6 @@
 /*!
  * jQuery Lifestream Plug-in
- * @version 0.2.1
+ * @version 0.2.5
  * Show a stream of your online activity
  *
  * Copyright 2011, Christian Vuerings - http://denbuzze.com
@@ -83,21 +83,12 @@
         for ( ; i < length; i++ ) {
           item = items[i];
           if ( item.html ) {
-            if ( item.url ) {
-              $('<li class="'+ settings.classname + '-'
-                + item.config.service + '">').data( "name", item.config.service )
-                                             .data( "url", item.url )
-                                             .data( "time", item.date )
-                                             .append( item.html )
-                                             .appendTo( ul );
-            } else {
-              $('<li class="'+ settings.classname + '-'
-                + item.config.service + '">').data( "name", item.config.service )
-                                             .data( "url", "#" )
-                                             .data( "time", item.date )
-                                             .append( item.html )
-                                             .appendTo( ul );
-            }
+            $('<li class="'+ settings.classname + '-'
+              + item.config.service + '">').data( "name", item.config.service )
+                                           .data( "url", item.url || "#" )
+                                           .data( "time", item.date )
+                                           .append( item.html )
+                                           .appendTo( ul );
           }
         }
 
@@ -238,10 +229,10 @@ $.fn.lifestream.feeds.bitbucket = function( config, callback ) {
   };
 
   $.ajax({
-    url: $.fn.lifestream.createYqlUrl('select events.event,' 
+    url: $.fn.lifestream.createYqlUrl('select events.event,'
        + 'events.node, events.created_on,'
        + 'events.repository.name, events.repository.owner '
-       + 'from json where url = "https://api.bitbucket.org/1.0/users/' 
+       + 'from json where url = "https://api.bitbucket.org/1.0/users/'
        + config.user + '/events/"'),
     dataType: 'jsonp',
     success: function( data ) {
@@ -264,17 +255,17 @@ $.fn.lifestream.feeds.bitly = function( config, callback ) {
     config.template);
 
   $.ajax({
-    url: $.fn.lifestream.createYqlUrl('select * from json where url="'
+    url: $.fn.lifestream.createYqlUrl('select data.short_url, data.created, '
+      + 'data.title from json where url="'
       + 'http://bitly.com/u/' + config.user + '.json"'),
     dataType: "jsonp",
     success: function( input ) {
       var output = [], i = 0, j;
-      if ( input.query && input.query.count && input.query.results.json
-          && input.query.results.json.data ) {
-        list = input.query.results.json.data;
+      if ( input.query && input.query.count && input.query.results.json ) {
+        list = input.query.results.json;
         j = list.length;
         for( ; i < j; i++) {
-          var item = list[i];
+          var item = list[i].data;
           output.push({
             date: new Date(item.created * 1000),
             config: config,
@@ -484,6 +475,64 @@ $.fn.lifestream.feeds.deviantart = function( config, callback ) {
 
 };
 })(jQuery);(function($) {
+$.fn.lifestream.feeds.digg = function( config, callback ) {
+
+	var template = $.extend({},
+		{
+			comment: 'commented on <a href="${url}" title="${title}">${title}</a>',
+			digg: 'dugg <a href="${url}" title="${title}">${title}</a>',
+			submission: 'submitted <a href="${url}" title="${title}">${title}</a>'
+		},
+		config.template);
+
+  $.ajax({
+    url: "http://services.digg.com/2.0/user.getActivity?username="
+      + config.user + "&type=javascript",
+    dataType: "jsonp",
+    success: function( data ) {
+      var output = [], i = 0, j;
+
+      if(data && data.stories) {
+        j = data.stories.length;
+        for( ; i<j; i++) {
+
+          var item = data.stories[i];
+
+          // Parse activities.
+          // One story can have all activity types
+          var k = item.activity.length;
+
+          for( l = 0; l<k; l++) {
+          	// Get most accurate date
+          	var time;
+          	if( item.activity[l] === 'submission'
+          	    || item.promote_date === null ) {
+          	  time = item.date_created;
+          	} else {
+          	  time = item.promote_date;
+          	}
+
+            output.push({
+	            date: new Date( time * 1000 ),
+  	          config: config,
+  	          html: $.tmpl( template[item.activity[l]], item )
+  	        });
+          }
+        }
+      }
+
+      callback(output);
+    }
+  });
+
+  // Expose the template.
+  // We use this to check which templates are available
+  return {
+    "template" : template
+  };
+
+};
+})(jQuery);(function($) {
 $.fn.lifestream.feeds.dribbble = function( config, callback ) {
 
     var template = $.extend({},
@@ -522,6 +571,55 @@ $.fn.lifestream.feeds.dribbble = function( config, callback ) {
 
   };
   })(jQuery);(function($) {
+$.fn.lifestream.feeds.facebook_page = function( config, callback ) {
+
+  var template = $.extend({},
+    {
+      wall_post: 'post on wall <a href="${link}">${title}</a>'
+    },
+    config.template),
+
+  /**
+   * Parse the input from facebook
+   */
+  parseFBPage = function( input ) {
+    var output = [], list, i = 0, j;
+
+    if(input.query && input.query.count && input.query.count >0) {
+	  list = input.query.results.rss.channel.item;
+      j = list.length;
+      for( ; i<j; i++) {
+        var item = list[i];
+        if( $.trim( item.title ) ){
+          output.push({
+            date: new Date(item["pubDate"]),
+            config: config,
+            html: $.tmpl( template.wall_post, item )
+          });
+        }
+      }
+    }
+    return output;
+  };
+
+  $.ajax({
+    url: $.fn.lifestream.createYqlUrl('select * from xml where url="'
+      + 'www.facebook.com/feeds/page.php?id='
+      + config.user + '&format=rss20"'),
+    dataType: 'jsonp',
+    success: function( data ) {
+	  callback(parseFBPage(data));
+    }
+  });
+
+  // Expose the template.
+  // We use this to check which templates are available
+  return {
+    "template" : template
+  };
+
+};
+})(jQuery);(function($) {
 $.fn.lifestream.feeds.flickr = function( config, callback ) {
 
   var template = $.extend({},
@@ -1062,8 +1160,8 @@ $.fn.lifestream.feeds.lastfm = function( config, callback ) {
 
   var template = $.extend({},
     {
-      loved: 'listened to <a href="${artist.mbid}">${artist.content}</a> - '
-        + '<a href="${url}">${name}</a>'
+      loved: 'loved <a href="${url}">${name}</a> by '
+        + '<a href="${artist.url}">${artist.name}</a>'
     },
     config.template),
 
@@ -1071,16 +1169,17 @@ $.fn.lifestream.feeds.lastfm = function( config, callback ) {
     var output = [], list, i = 0, j;
 
     if(input.query && input.query.count && input.query.count > 0
-        && input.query.results.recenttracks
-        && input.query.results.recenttracks.track) {
-      list = input.query.results.recenttracks.track;
+        && input.query.results.lovedtracks
+        && input.query.results.lovedtracks.track) {
+      list = input.query.results.lovedtracks.track;
       j = list.length;
       for( ; i<j; i++) {
-        var item = list[i];
+        var item = list[i],
+            itemDate =  item.nowplaying ? new Date() : item.date.uts;
         output.push({
-          date: new Date(parseInt((item.date.uts * 1000), 10)),
+          date: new Date(parseInt((itemDate * 1000), 10)),
           config: config,
-          html: $.tmpl( template.loved, item ),
+          html: $.tmpl( template.loved, item )
         });
       }
     }
@@ -1090,7 +1189,7 @@ $.fn.lifestream.feeds.lastfm = function( config, callback ) {
   $.ajax({
     url: $.fn.lifestream.createYqlUrl('select * from xml where url='
       + '"http://ws.audioscrobbler.com/2.0/user/'
-      + config.user + '/recenttracks.xml"'),
+      + config.user + '/lovedtracks.xml"'),
     dataType: 'jsonp',
     success: function( data ) {
       callback(parseLastfm(data));
@@ -1099,6 +1198,52 @@ $.fn.lifestream.feeds.lastfm = function( config, callback ) {
 
   // Expose the template.
   // We use this to check which templates are available
+  return {
+    "template" : template
+  };
+
+};
+})(jQuery);
+(function($) {
+$.fn.lifestream.feeds.librarything = function( config, callback ) {
+
+  var template = $.extend({},
+    {
+      book: 'added <a href="http://www.librarything.com/work/book/${book.book_id}"'
+          + ' title="${book.title} by ${book.author_fl}">'
+          + '${book.title} by ${book.author_fl}</a> to my library'
+    },
+    config.template),
+
+  parseLibraryThing = function( input ) {
+    var output = [], i = "";
+
+    if(input.books) {
+      // LibraryThing returns a hash that maps id to Book objects
+      // which leads to the following slightly weird for loop.
+      for (i in input.books) {
+      	if (input.books.hasOwnProperty(i)) {
+          var book = input.books[i];
+          output.push({
+            date : new Date(book.entry_stamp * 1000),
+            config : config,
+            html : $.tmpl(template.book, {book : book}),
+            url : 'http://www.librarything.com/profile/' + config.user
+          });
+        }
+      }
+    }
+    return output;
+  };
+
+  $.ajax({
+    url: 'http://www.librarything.com/api_getdata.php?booksort=entry_REV&userid=' + config.user,
+    dataType: 'jsonp',
+    success: function( data ) {
+      callback(parseLibraryThing(data));
+    }
+  });
+
   return {
     "template" : template
   };
@@ -1175,7 +1320,7 @@ $.fn.lifestream.feeds.picplz = function( config, callback ) {
             date: new Date( ( item.date ) * 1000 ),
             config: config,
             html: $.tmpl( template.uploaded, {
-              url: item.pic_files["640r"].img_url,
+              url: 'http://picplz.com' + item.url,
               title: item.caption || item.id
               } )
           });
@@ -1794,6 +1939,55 @@ $.fn.lifestream.feeds.vimeo = function( config, callback ) {
     crossDomain: true,
     success: function( data ) {
       callback(parseVimeo(data));
+    }
+  });
+
+  // Expose the template.
+  // We use this to check which templates are available
+  return {
+    "template" : template
+  };
+
+};
+})(jQuery);(function($) {
+$.fn.lifestream.feeds.wikipedia = function( config, callback ) {
+  // default to english if no language was set
+  var language = config.language || 'en',
+
+  template = $.extend({},
+    {
+      contribution: 'contributed to <a href="${url}">${title}</a>'
+    },
+    config.template);
+
+  $.ajax({
+    url: "http://" + language
+    + ".wikipedia.org/w/api.php?action=query&ucuser="
+    + config.user + "&list=usercontribs&ucdir=older&format=json",
+    dataType: "jsonp",
+    success: function( data ) {
+      var output = [], i = 0, j;
+
+      if(data && data.query.usercontribs) {
+        j = data.query.usercontribs.length;
+        for( ; i<j; i++) {
+
+          var item = data.query.usercontribs[i];
+          
+          // Fastest way to get the URL. 
+          // Alternatively, we'd have to poll wikipedia for the pageid's link
+          item.url = 'http://' + language + '.wikipedia.org/wiki/'
+          + item.title.replace(' ', '_');
+
+          output.push({
+            date: new Date( item.timestamp ),
+            config: config,
+            html: $.tmpl( template.contribution, item )
+          });
+        }
+      }
+
+      callback(output);
     }
   });
 
