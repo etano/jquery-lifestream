@@ -88,7 +88,7 @@
                                            .data( "url", item.url || "#" )
                                            .data( "time", item.date )
                                            .append( item.html )
-                                           .appendTo( ul );
+                                           .appendTo( ul )
           }
         }
 
@@ -1033,7 +1033,7 @@ $.fn.lifestream.feeds.instapaper = function( config, callback ) {
 
   var template = $.extend({},
     {
-      loved: 'starred <a href="${link}">${title}</a>'
+      loved: 'loved <a href="${link}">${title}</a>'
     },
     config.template),
 
@@ -1050,8 +1050,7 @@ $.fn.lifestream.feeds.instapaper = function( config, callback ) {
         output.push({
           date: new Date( item.pubDate ),
           config: config,
-          html: $.tmpl( template.loved, item ),
-          url: 'http://www.instapaper.com/'
+          html: $.tmpl( template.loved, item )
         });
       }
     }

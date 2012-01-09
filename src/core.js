@@ -88,7 +88,7 @@
                                            .data( "url", item.url || "#" )
                                            .data( "time", item.date )
                                            .append( item.html )
-                                           .appendTo( ul );
+                                           .appendTo( ul )
           }
         }
 
